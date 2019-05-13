@@ -8,5 +8,5 @@ def close_db():
     conn.close()
 
 
-conn = psycopg2.connect("dbname='open311status_development' user='open311' password='open311' host='localhost'")
+conn = psycopg2.connect("dbname='open311' user='' password='' host='localhost'")
 db = conn.cursor('open311-data-analysis', cursor_factory=psycopg2.extras.DictCursor)

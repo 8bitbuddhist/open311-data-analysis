@@ -3,12 +3,10 @@ from data.queries import Queries
 import folium
 
 
-# Optional: Check Pandas library https://pandas.pydata.org/
+def map_requests(location_data):
+    from pathlib import Path
 
-
-def generate_map(location_data):
-    mahrow = location_data[0]
-    f_map = folium.Map(location=[float(mahrow['latitude']), float(mahrow['longitude'])])
+    f_map = folium.Map(location=[float(location_data[0]['latitude']), float(location_data[0]['longitude'])])
     for row in location_data:
         coordinates = [float(row['latitude'].strip(' "')), float(row['longitude'].strip(' "'))]
 
@@ -32,71 +30,97 @@ def generate_map(location_data):
                       icon=icon).add_to(f_map)
 
     f_map.save("map.html")
+    print("Map saved to " + str(Path().absolute()) + "/map.html")
 
 
-def generate_line_graph(trend_data):
+def chart_requests_by_occurrence(data):
     import matplotlib.pyplot as plt
     import pandas
 
-    df = pandas.DataFrame(trend_data,
-                          columns=['total', 'opened', 'closed', 'closed_rate', 'aggregator'])
+    df = pandas.DataFrame(data,
+                          columns=['requests', 'service_name']).nlargest(5, 'requests')
 
-    plt.plot(df['aggregator'], df['opened'], color='orange', label='Opened', solid_joinstyle='round')
-    plt.plot(df['aggregator'], df['closed'], color='green', label='Closed', solid_joinstyle='round')
+    plt.pie(df['requests'], autopct='%.0f%%', pctdistance=0.85, labels=df['service_name'], startangle=90)
 
-    # df = pandas.DataFrame(trend_data, columns=['total', 'opened', 'closed', 'closed_rate', 'aggregator', 'service_name'])
-    # for service_name, sub_df in dataframe.groupby(by='service_name'):
-    # plt.plot(sub_df['aggregator'], sub_df['opened'], label=service_name)
+    plt.axis('equal')
+    # plt.title('Requests by Type')
+    plt.tight_layout()
+    plt.show()
 
+
+def chart_department_performance(data):
+    import matplotlib.pyplot as plt
+    import pandas
+
+    df = pandas.DataFrame(data,
+                          columns=['agency_responsible', 'requests', 'opened', 'closed', 'avg_request_age', 'total_time_spent', 'avg_time_per_request', 'avg_resolution_time'])
+
+    plt.plot(df['date'], df['opened'], color='orange', label='Opened')
+    plt.fill_between(df['date'], df['opened'], color='orange')
+    plt.plot(df['date'], df['closed'], color='green', label='Closed')
+    plt.fill_between(df['date'], df['closed'], color='green')
+
+
+def chart_request_trends(data):
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import MaxNLocator
+    import pandas
+
+    df = pandas.DataFrame(data,
+                          columns=['total', 'opened', 'closed', 'date'])
+    # df['date'] = pandas.to_datetime(df.date).dt.strftime('%d/%m/%Y')
+
+    plt.plot(df['date'], df['opened'], color='orange', label='Opened')
+    plt.plot(df['date'], df['closed'], color='green', label='Closed')
+
+    ax = plt.gca()
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    
     plt.xlabel('Date')
     plt.xticks(rotation=45)
     plt.ylabel('Requests')
-    plt.title('Service Requests - 5/4/2019 to 5/10/2019')
+    plt.title('Service Requests by Day')
     plt.legend(loc='center right')
     plt.show()
 
 
-def generate_line_chart_by_agency(trend_data):
+def chart_requests_by_agency(data):
     import matplotlib.pyplot as plt
     import pandas
 
-    df = pandas.DataFrame(trend_data,
-                          columns=['total', 'opened', 'closed', 'closed_rate', 'aggregator', 'agency_responsible'])
-    for agency, sub_df in df.groupby(by='agency_responsible'):
-        plt.plot(sub_df['aggregator'], sub_df['opened'], label=agency, solid_joinstyle='round')
-        # plt.plot(df['aggregator'], df['opened'], color='orange', label='Opened', solid_joinstyle='round')
-        # plt.plot(df['aggregator'], df['closed'], color='green', label='Closed', solid_joinstyle='round')
+    df = pandas.DataFrame(data,
+                          columns=['agency_responsible', 'requests', 'open', 'closed', 'avg_request_age',
+                                   'total_time_spent', 'avg_time_per_request', 'avg_resolution_time'])\
+        .sort_values('requests')
 
-    plt.xlabel('Date')
-    plt.ylabel('Count')
-    plt.title('Service Request Response Over Time By Agency')
-    plt.legend()
-    plt.show()
+    plt1 = plt.bar(df['agency_responsible'], df['closed'], color='green')
+    plt2 = plt.bar(df['agency_responsible'], df['open'], color='orange', bottom=df['closed'])
 
-
-def generate_bubble_chart(trend_data):
-    import matplotlib.pyplot as plt
-    import pandas
-
-    df = pandas.DataFrame(trend_data,
-                          columns=['total', 'opened', 'closed', 'closed_rate', 'aggregator', 'service_name'])
-    for service_name, sub_df in df.groupby(by='service_name'):
-        plt.scatter(sub_df['aggregator'], service_name, sub_df['opened'])
-        plt.scatter(sub_df['aggregator'], service_name, sub_df['closed'])
-
-    # plt.xlabel('Date')
-    # plt.ylabel('Count')
-    # plt.title('Service Request Response Over Time')
-    plt.legend()
+    plt.xlabel('Department')
+    plt.xticks(rotation=45, horizontalalignment='right')
+    plt.ylabel('Requests')
+    plt.title('Service Request Count By Department')
+    plt.legend((plt1[0], plt2[0]), ('Closed', 'Open'))
     plt.show()
 
 
 def main():
+
     queries = Queries(db)
-    # generate_map(queries.location())
-    generate_line_graph(queries.trends())
-    # generate_bubble_chart(queries.trends_with_service_name())
-    # generate_line_chart_by_agency(queries.trends_with_department_name())
+
+    # Uncomment any one of the following functions and enter the city of your choice.
+
+    # Create a pie chart of requests according to frequency.
+    chart_requests_by_occurrence(queries.request_types('peoria'))
+
+    # Generate a map of requests (saved in the project's root directory).
+    # map_requests(queries.location())
+
+    # Generate a line chart of requests over time. Enter the starting date after the city.
+    # chart_request_trends(queries.trends('peoria', '5/10/2019'))
+
+    # Generate a bar chart of requests categorized by agency/department.
+    # chart_requests_by_agency(queries.department_performance('bloomington'))
 
 
 main()

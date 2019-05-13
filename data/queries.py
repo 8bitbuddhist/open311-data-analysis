@@ -19,7 +19,7 @@ class Queries:
                         "FROM service_requests")
         return self.db.fetchall()
 
-    def location(self):
+    def location(self, city):
         self.db.execute("SELECT slug,"
                         "raw_data ->> 'service_name' AS service_name,"
                         "raw_data ->> 'description' AS description,"
@@ -31,48 +31,49 @@ class Queries:
                         "raw_data ->> 'long' AS longitude,"
                         "geometry "
                         "FROM service_requests "
-                        "JOIN cities ON service_requests.city_id = cities.id AND cities.slug = 'bloomington' "
+                        "JOIN cities ON service_requests.city_id = cities.id "
+                        "AND cities.slug = '" + city + "' "
                         "WHERE raw_data ->> 'address' is not null "
                         "LIMIT 100")
         return self.db.fetchall()
 
-    def trends(self):
-        self.db.execute("SELECT COUNT(*) as total,"
-                        "COUNT(1) FILTER (WHERE status <> 'closed') AS opened,"
-                        "COUNT(1) FILTER (WHERE status = 'closed') AS closed,"
-                        "ROUND(COUNT(1) FILTER (WHERE status = 'closed') / GREATEST(COUNT(1), 1) ::DECIMAL, 2) as closed_rate,"
-                        "DATE_TRUNC('day', requested_datetime) AS aggregator "
-                        "FROM service_requests "
-                        "JOIN cities on service_requests.city_id = cities.id "
-                        "AND cities.slug = 'brookline' "
-                        "GROUP BY aggregator "
-                        "ORDER BY aggregator")
-        return self.db.fetchall()
-
-    def trends_with_service_name(self):
-        self.db.execute("SELECT COUNT(*) as total,"
-                        "COUNT(1) FILTER (WHERE status <> 'closed') AS opened,"
-                        "COUNT(1) FILTER (WHERE status = 'closed') AS closed,"
-                        "ROUND(COUNT(1) FILTER (WHERE status = 'closed') / GREATEST(COUNT(1), 1) ::DECIMAL, 2) as closed_rate,"
-                        "DATE_TRUNC('day', requested_datetime) AS aggregator, "
+    def request_types(self, city):
+        self.db.execute("SELECT "
+                        "COUNT(raw_data ->> 'service_request_id') AS requests, "
                         "raw_data ->> 'service_name' AS service_name "
                         "FROM service_requests "
-                        "JOIN cities on service_requests.city_id = cities.id "
-                        "AND cities.slug = 'brookline' "
-                        "GROUP BY service_name, aggregator "
-                        "ORDER BY aggregator")
+                        "JOIN cities ON service_requests.city_id = cities.id "
+                        "AND cities.slug = '" + city + "' "
+                        "GROUP BY service_name "
+                        "ORDER BY requests DESC")
         return self.db.fetchall()
 
-    def trends_with_department_name(self):
-        self.db.execute("SELECT COUNT(*) as total,"
-                        "COUNT(1) FILTER (WHERE status <> 'closed') AS opened,"
-                        "COUNT(1) FILTER (WHERE status = 'closed') AS closed,"
-                        "ROUND(COUNT(1) FILTER (WHERE status = 'closed') / GREATEST(COUNT(1), 1) ::DECIMAL, 2) as closed_rate,"
-                        "DATE_TRUNC('day', requested_datetime) AS aggregator, "
-                        "raw_data ->> 'agency_responsible' AS agency_responsible "
+    def trends(self, city, from_date):
+        self.db.execute("SELECT "
+                        "COUNT(*) as total, "
+                        "COUNT(1) FILTER (WHERE status <> 'closed') AS opened, "
+                        "COUNT(1) FILTER (WHERE status = 'closed') AS closed, "
+                        "DATE_TRUNC('day', requested_datetime) AS date "
+                        "FROM service_requests "
+                        "JOIN cities ON service_requests.city_id = cities.id "
+                        "AND cities.slug = '" + city + "' "
+                        "WHERE requested_datetime >= '" + from_date + "' "
+                        "GROUP BY date "
+                        "ORDER BY date ASC")
+        return self.db.fetchall();
+
+    def department_performance(self, city):
+        self.db.execute("SELECT "
+                        "raw_data ->> 'agency_responsible' AS agency_responsible, "
+                        "COUNT(service_request_id) AS requests, "
+                        "COUNT(1) FILTER (WHERE status <> 'closed') AS open, "
+                        "COUNT(1) FILTER (WHERE status = 'closed') AS closed, "
+                        "AVG(NOW() - requested_datetime) AS avg_request_age, "
+                        "SUM(updated_datetime - requested_datetime) AS total_time_spent, "
+                        "AVG(updated_datetime - requested_datetime) FILTER (WHERE updated_datetime <> requested_datetime) AS avg_time_per_request, "
+                        "AVG(updated_datetime - requested_datetime) FILTER (WHERE status = 'closed') AS avg_resolution_time "
                         "FROM service_requests "
                         "JOIN cities on service_requests.city_id = cities.id "
-                        "AND cities.slug = 'bloomington' "
-                        "GROUP BY agency_responsible, aggregator "
-                        "ORDER BY aggregator")
+                        "AND cities.slug = '" + city + "' "
+                        "GROUP BY agency_responsible")
         return self.db.fetchall()
